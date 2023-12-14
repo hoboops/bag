@@ -1,5 +1,16 @@
 #!/bin/bash
 
+function create_admin_user () {
+	echo "- read accept to create admin user"
+	echo "- make sure wheel group is sudoless"
+	echo "- create user in wheel group"
+	echo "- create ssh key for user"
+	echo "- add key to allowed users"
+	echo "- switch to user"
+	echo "- start bag"
+	exit
+}
+
 function restore_backups () {
 	HAS_FILE_LIST=false
 	
@@ -22,16 +33,7 @@ function restore_backups () {
 	fi
 }
 
-if [[ -z "$BAG_DIR" ]]; then
-	export BAG_DIR=$(realpath .)
-	ENV_PATH="$BAG_DIR/.env"
-				
-	source "$ENV_PATH.default"
-
-	if [[ -f "$ENV_PATH" ]]; then
-		source "$ENV_PATH"
-	fi
-
+function check_config_modes () {
 	VALID_CONFIG_MODES="abort|keep|overwrite|overwrite-restore|overwrite-backup"
 	
 	if [[ ! "$VALID_CONFIG_MODES" =~ (^|)$BAG_CONFIG_MODE($|) ]]; then
@@ -40,20 +42,9 @@ if [[ -z "$BAG_DIR" ]]; then
 		echo "$VALID_CONFIG_MODES" 
 		exit
 	fi
-	
-	BAG_BAG_CONFIG_DIR="$BAG_CONFIG_DIR/bag"
-	VERSION_FILE_PATH="$BAG_BAG_CONFIG_DIR/VERSION"
-	FIRST_RUN=true
+}
 
-	if [[ -f "$VERSION_FILE_PATH" ]]; then
-		FIRST_RUN=false
-	fi
-
-	ABORT=false
-	HAS_FILE_LIST=false
-
-	restore_backups # restore backups that may were not restored because unclean termination
-
+function copy_config_files() {
 	for SRC_PATH in $(find "config"); do
 		FILE_PATH=$(echo "$SRC_PATH" | sed "s/^config//g")
 		DEST_PATH="$BAG_CONFIG_DIR$FILE_PATH"
@@ -103,6 +94,39 @@ if [[ -z "$BAG_DIR" ]]; then
 			fi
 		fi
 	done
+}
+
+if [[ -z "$BAG_DIR" ]]; then
+	export BAG_DIR=$(realpath .)
+	ENV_PATH="$BAG_DIR/.env"
+				
+	source "$ENV_PATH.default"
+
+	if [[ -f "$ENV_PATH" ]]; then
+		source "$ENV_PATH"
+	fi
+
+	CURRENT_USER=$(whoami)
+
+	if [[ "$CURRENT_USER" == "root" ]]; then
+		create_admin_user
+	fi
+
+	check_config_modes
+	
+	BAG_BAG_CONFIG_DIR="$BAG_CONFIG_DIR/bag"
+	VERSION_FILE_PATH="$BAG_BAG_CONFIG_DIR/VERSION"
+	FIRST_RUN=true
+
+	if [[ -f "$VERSION_FILE_PATH" ]]; then
+		FIRST_RUN=false
+	fi
+
+	ABORT=false
+	HAS_FILE_LIST=false
+
+	restore_backups # restore backups that may were not restored because unclean termination
+	copy_config_files
 
 	if [[ "$ABORT" == true ]]; then
 		echo "Aborting because setting BAG_CONFIG_MODE is '$BAG_CONFIG_MODE'."
